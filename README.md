@@ -33,10 +33,7 @@ We apply a convolution architecture on CelebA dataset, as shown below:
 Stability
 ---------
 
-Here displays the variance of the objective loss over a sliding time window.
-MAAE has a lower standard deviation value than AAE during training,
-reaffirming MAAE’s acceleration to steady-state; with *N* = 3 achieves
-steady-state almost 2x as fast as AAE (*N* = 1).
+Here displays the variance of the objective loss over a sliding time window. MAAE has a lower standard deviation value than AAE during training, reaffirming MAAE’s acceleration to steady-state; with *N* = 3 achieves steady-state almost 2x as fast as AAE (*N* = 1).
 
 ![stddv](./stddv.png "stddv")
 
@@ -44,8 +41,7 @@ steady-state almost 2x as fast as AAE (*N* = 1).
 Latent Representation Visualization
 -----------------------------------
 
-Here is visualization of the 2-dimension hidden representations. An ideal learned manifold that exhibits sharp transitions indicates that
-the encoding space is filled and there are no "holes". By observing that, we found MAAE(right) has a sharper boundary between every two clusters.
+Here is visualization of the 2-dimension hidden representations. An ideal learned manifold that exhibits sharp transitions indicates that the encoding space is filled and there are no "holes". By observing that, we found MAAE(right) has a sharper boundary between every two clusters.
 ![mainfold](./AAE_mainfold.png "AAE")![mainfold](./MAAE_mainfold.png "MAAE")
 
 Style Disentangled
