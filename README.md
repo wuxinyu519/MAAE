@@ -48,7 +48,7 @@ Here is visualization of the 2-dimension hidden representations. An ideal learne
 Style Disentangled
 ------------------
 
-Besides, we leverage the label information to disentangle style and content on MNIST (Fig. \ref{fig:style_distangle}). Specifically, the labels are encoded as one hot embedding, combined with the hidden feature z, then fed into the decoder. Each row of image presents different labels with a fixed latent z sampled randomly.
+Besides, we leverage the label information to disentangle style and content on MNIST. Specifically, the labels are encoded as one hot embedding, combined with the hidden feature z, then fed into the decoder. Each row of image presents different labels with a fixed latent z sampled randomly.
 
 ![style_distangled](./style_distangled.jpeg "stddv")
 
