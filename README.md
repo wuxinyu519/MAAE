@@ -4,7 +4,8 @@
 
 Multi-adversarial autoencoder appendix
 
-##Archittecture
+Archittecture
+----------------
 
 ![architecture](./maae_architecture_v4.png "MAAE")
 
