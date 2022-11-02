@@ -48,7 +48,7 @@ Here is visualization of the 2-dimension hidden representations. An ideal learne
 the encoding space is filled and there are no "holes". By observing that, we found MAAE(right) has a sharper boundary between every two clusters.
 
 <center class = "half">
-<img src = “./AAE_mainfold.png”  width = “50%” align = left><img src = “./MAAE_mainfold.png”  width = “50%” align = right>
+<img src = “./AAE_mainfold.png”  width = “40%” align = left><img src = “./MAAE_mainfold.png”  width = “40%” align = right>
 </center>
 
 
