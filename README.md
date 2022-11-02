@@ -1,0 +1,2 @@
+# MAAE
+Multi-adversarial autoencoder
