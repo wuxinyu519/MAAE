@@ -8,33 +8,16 @@ Probabilistic unsupervised adversarial autoencoder.
 import os
 import time
 from pathlib import Path
-from math import sin, cos, sqrt
 import matplotlib.pyplot as plt
-from matplotlib import gridspec
 import matplotlib.patches as mpatches
 import numpy as np
 import tensorflow as tf
-from numpy import cov
-from numpy import trace
-from numpy import iscomplexobj
-from random import *
-from scipy.linalg import sqrtm
-import pandas as pd
-import keras.backend as K
-from tensorflow.keras.preprocessing import image_dataset_from_directory
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
 from sklearn.model_selection import train_test_split
-
 from numpy.random import randint
-from scipy.linalg import sqrtm
 
-from keras.applications.inception_v3 import preprocess_input
-from keras.datasets.mnist import load_data
-from skimage.transform import resize
-from skimage.color import gray2rgb
-from tqdm import tqdm
 
-UNIQUE_RUN_ID = 'unsupervised_aae_gaussian_posterior_dense_8z_testlr'
+UNIQUE_RUN_ID = 'unsupervised_aae_gaussian_posterior_dense_8z'
 PROJECT_ROOT = Path.cwd()
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 # -------------------------------------------------------------------------------------------------------------
@@ -47,7 +30,7 @@ np.random.seed(random_seed)
 output_dir = PROJECT_ROOT / 'outputs'
 output_dir.mkdir(exist_ok=True)
 
-experiment_dir = output_dir / 'unsupervised_aae_gaussian_posterior_dense_8z_testlr'
+experiment_dir = output_dir / 'unsupervised_aae_gaussian_posterior_dense_8z'
 experiment_dir.mkdir(exist_ok=True)
 
 latent_space_dir = experiment_dir / 'latent_space'
@@ -66,8 +49,8 @@ print("Loading data...")
 
 (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
 x_train, x_valid, y_train, y_valid = train_test_split(
-    x_train, y_train,  # 把上面剩余的 x_train, y_train继续拿来切
-    test_size=1 / 60  # test_size默认是0.25
+    x_train, y_train,
+    test_size=1 / 60
 )
 # -------------------------------------------------------------------------------------------------------------
 # HYPERPARAMETER
@@ -81,15 +64,9 @@ n_samples = x_train.shape[0]
 z_dim = 8
 h_dim = 1000
 # -------------------------------------------------------------------------------------------------------------
-# Define cyclic learning rate
-# ae_lr = 0.0002
-# gen_lr = 0.0001
-# dc_lr = 0.0001
 ae_lr = 0.0002
 gen_lr = 0.0001
 dc_lr = 0.0001
-# max_lr = 0.001
-# step_size = 2 * np.ceil(x_train.shape[0] / batch_size)
 global_step = 0
 n_epochs = 200
 
@@ -98,18 +75,13 @@ n_epochs = 200
 ae_loss_weight = 1.
 gen_loss_weight = 1.
 dc_loss_weight = 1.
-# lam=[tf.Variable(tf.constant(1.))]
 
 cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
-# cross_entropy=tf.nn.sigmoid_cross_entropy_with_logits()
+
 mse = tf.keras.losses.MeanSquaredError()
-# mse=tf.math.squared_difference()
+
 accuracy = tf.keras.metrics.BinaryAccuracy()
-# weight_init = tf.keras.initializers.RandomNormal(stddev=WEIGHT_INIT_STDDEV)
 
-
-# prepare the inception v3 model
-# model = tf.keras.applications.InceptionV3(include_top=False, pooling='avg', input_shape=(299, 299, 3))
 # -------------------------------------------------------------------------------------------------------------
 # Create the dataset iterator
 x_train = x_train.astype('float32') / 255.
@@ -119,7 +91,7 @@ x_train = x_train.reshape(x_train.shape[0], img_size * img_size * num_c)
 x_test = x_test.reshape(x_test.shape[0], img_size * img_size * num_c)
 x_test_fid = x_test
 real_images = np.reshape(x_test_fid, (x_test_fid.shape[0], img_size, img_size, num_c))
-# real_images = np.array(x_test_fid)
+
 # -------------------------------------------------------------------------------------------------------------
 # Create the dataset iterator
 
@@ -202,7 +174,7 @@ def make_discriminator_model():
     x = tf.keras.layers.Dense(h_dim, kernel_initializer=kernel_initializer)(x)
     x = tf.keras.layers.Dropout(0.2)(x)
     x = tf.keras.layers.ReLU()(x)
-    prediction = tf.keras.layers.Dense(1, kernel_initializer=kernel_initializer,activation='sigmoid')(x)
+    prediction = tf.keras.layers.Dense(1, kernel_initializer=kernel_initializer, activation='sigmoid')(x)
     model = tf.keras.Model(inputs=encoded, outputs=prediction)
     return model
 
@@ -220,7 +192,7 @@ def discriminator_loss(real_output, fake_output, dc_loss_weight):
 
 def generator_loss(fake_output, gen_loss_weight):
     # return gen_loss_weight * cross_entropy(tf.ones_like(fake_output), fake_output)
-    return tf.reduce_mean(tf.math.log(1-fake_output))
+    return tf.reduce_mean(tf.math.log(1 - fake_output))
 
 
 def generate_fake_images(decoder, NUM):
@@ -235,79 +207,14 @@ def generate_fake_images(decoder, NUM):
     return x
 
 
-# scale an array of images to a new size
-# scale an array of images to a new size
-def scale_images(images, new_shape):
-    images_list = list()
-    for image in images:
-        # resize with nearest neighbor interpolation
-        new_image = resize(image, new_shape, 0)
-        # store
-        images_list.append(new_image)
-    return np.asarray(images_list)
-
-
-# calculate frechet inception distance
-def calculate_fid(model, images1, images2):
-    # calculate activations
-    act1 = model.predict(images1)
-    act2 = model.predict(images2)
-    # calculate mean and covariance statistics
-    mu1, sigma1 = act1.mean(axis=0), cov(act1, rowvar=False)
-    mu2, sigma2 = act2.mean(axis=0), cov(act2, rowvar=False)
-    # calculate sum squared difference between means
-    ssdiff = np.sum((mu1 - mu2) ** 2.0)
-    # calculate sqrt of product between cov
-    covmean = sqrtm(sigma1.dot(sigma2))
-    # check and correct imaginary numbers from sqrt
-    if iscomplexobj(covmean):
-        covmean = covmean.real
-    # calculate score
-    fid = ssdiff + trace(sigma1 + sigma2 - 2.0 * covmean)
-    return fid
-
-
-def gaussian_mixture(batch_size, n_labels, n_dim, x_var=0.5, y_var=0.1, label_indices=None):
-    np.random.seed(0)
-    if n_dim != 2:
-        raise Exception("n_dim must be 2.")
-
-    def sample(x, y, label, n_labels):
-        shift = 1.4
-        r = 2.0 * np.pi / float(n_labels) * float(label)
-        new_x = x * cos(r) - y * sin(r)
-        new_y = x * sin(r) + y * cos(r)
-        new_x += shift * cos(r)
-        new_y += shift * sin(r)
-        return np.array([new_x, new_y]).reshape((2,))
-
-    x = np.random.normal(0, x_var, (batch_size, (int)(n_dim / 2)))
-    y = np.random.normal(0, y_var, (batch_size, (int)(n_dim / 2)))
-    z = np.empty((batch_size, n_dim), dtype=np.float32)
-    for batch in range(batch_size):
-        for zi in range((int)(n_dim / 2)):
-            if label_indices is not None:
-                z[batch, zi * 2:zi * 2 + 2] = sample(x[batch, zi], y[batch, zi], label_indices[batch], n_labels)
-            else:
-                z[batch, zi * 2:zi * 2 + 2] = sample(x[batch, zi], y[batch, zi], np.random.randint(0, n_labels),
-                                                     n_labels)
-
-    return z
-
-
 def reparameterization(z_mean, z_std):
     # Probabilistic with Gaussian posterior distribution
     epsilon = tf.random.normal(shape=z_mean.shape, mean=0., stddev=5.)
-    z = z_mean + tf.exp(z_std * .5)* epsilon
+    z = z_mean + tf.exp(z_std * .5) * epsilon
     return z
 
 
 # -------------------------------------------------------------------------------------------------------------
-# Define cyclic learning rate
-
-# ae_lr = 0.0002
-# dc_lr = 0.0001
-# gen_lr = 0.0001
 # Define optimizers
 ae_optimizer = tf.keras.optimizers.Adam(lr=ae_lr)
 dc_optimizer = tf.keras.optimizers.Adam(lr=dc_lr)
@@ -326,7 +233,6 @@ def train_step(batch_x):
         z = reparameterization(z_mean, z_std)
         decoder_output = decoder(z, training=True)
         # Autoencoder loss
-
         ae_loss = autoencoder_loss(batch_x, decoder_output, ae_loss_weight)
 
     ae_grads = ae_tape.gradient(ae_loss, encoder.trainable_variables + decoder.trainable_variables)
@@ -372,13 +278,11 @@ if not os.path.exists(f'./cruves/{UNIQUE_RUN_ID}'):
     os.mkdir(f'./cruves/{UNIQUE_RUN_ID}')
 writer = tf.summary.create_file_writer(f'./cruves/{UNIQUE_RUN_ID}/')
 with writer.as_default():
-    # real_images = np.array(generate_real_images(x_test_fid, 10000))
-    enc_std=[]
-    enc_dec_std=[]
-    all_std=[]
+    enc_std = []
+    enc_dec_std = []
+    all_std = []
     for epoch in range(n_epochs):
         start = time.time()
-
 
         epoch_ae_loss_avg = tf.metrics.Mean()
         epoch_dc_loss_avg = tf.metrics.Mean()
@@ -386,7 +290,6 @@ with writer.as_default():
         epoch_gen_loss_avg = tf.metrics.Mean()
         for batch, (batch_x, _) in enumerate(train_dataset):
             # -------------------------------------------------------------------------------------------------------------
-            # Calculate cyclic learning rate
             global_step = global_step + 1
 
             ae_loss, dc_loss, dc_acc, gen_loss = train_step(batch_x)
@@ -395,11 +298,11 @@ with writer.as_default():
             epoch_dc_acc_avg(dc_acc)
             epoch_gen_loss_avg(gen_loss)
 
-            #caculate the Standard Deviation of the encoder loss(recon+adversarial) after each 100 iterations.
+            # caculate the Standard Deviation of the encoder loss(recon+adversarial) after each 100 iterations.
             enc_std.append(np.mean(gen_loss))
             enc_dec_std.append(np.mean(ae_loss))
-            all_std.append(np.mean(gen_loss)+np.mean(ae_loss))
-            if (batch+1) % 100==0:
+            all_std.append(np.mean(gen_loss) + np.mean(ae_loss))
+            if (batch + 1) % 100 == 0:
                 tf.summary.scalar("enc_std", np.mean(np.std(enc_std)), global_step)
                 tf.summary.scalar("enc_dec_std", np.mean(np.std(enc_dec_std)), global_step)
                 tf.summary.scalar("all_std", np.mean(np.std(all_std)), global_step)
@@ -407,7 +310,7 @@ with writer.as_default():
                 enc_dec_std.clear()
                 all_std.clear()
 
-            # write data after every n-th batch
+            # write data after every 10-th batch
 
             if global_step % 10 == 0:
                 tf.summary.scalar("ae_loss", np.mean(epoch_ae_loss_avg.result()), global_step)
@@ -425,13 +328,12 @@ with writer.as_default():
                       epoch_gen_loss_avg.result()
                       ))
 
-        if (epoch + 1) % 10== 0:
+        if (epoch + 1) % 10 == 0:
             save_models(decoder, encoder, discriminator, epoch)
         # -------------------------------------------------------------------------------------------------------------
         if epoch % 1 == 0:
             # Latent Space
             z_mean, z_std = encoder(x_test, training=False)
-            # epsilon = tf.random.normal(shape=z_mean.shape, mean=0, stddev=1)
             z = reparameterization(z_mean, z_std)
             label_list = list(y_test)
 

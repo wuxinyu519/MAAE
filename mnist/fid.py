@@ -82,7 +82,7 @@ def calculate_fid(model, images1, images2):
 # prepare the inception v3 model
 model = InceptionV3(include_top=False, pooling='avg', input_shape=(299, 299, 3))
 decoder = tf.keras.models.load_model("./unsupervised_3d_maae_max_gaussian_posterior_dense_8z/decoder_199.model/")
-# decoder = tf.keras.models.load_model("./supervised_aae_mixture_posterior_dense_2z_testlr/decoder_2.model/")
+# decoder = tf.keras.models.load_model("./supervised_aae_mixture_posterior_dense_2z/decoder_2.model/")
 
 # generator = tf.keras.models.load_model("./gman_lam_75z/generator_24.model/")
 

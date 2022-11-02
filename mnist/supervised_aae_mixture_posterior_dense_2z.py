@@ -14,27 +14,13 @@ from matplotlib import gridspec
 import matplotlib.patches as mpatches
 import numpy as np
 import tensorflow as tf
-from numpy import cov
-from numpy import trace
-from numpy import iscomplexobj
-from random import *
-from scipy.linalg import sqrtm
-import pandas as pd
-import keras.backend as K
-from tensorflow.keras.preprocessing import image_dataset_from_directory
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
 from sklearn.model_selection import train_test_split
 
 from numpy.random import randint
-from scipy.linalg import sqrtm
 
-from keras.applications.inception_v3 import preprocess_input
-from keras.datasets.mnist import load_data
-from skimage.transform import resize
-from skimage.color import gray2rgb
-from tqdm import tqdm
-import tensorflow_probability as tfp
-UNIQUE_RUN_ID = 'supervised_3d_maae_max_mixture_posterior_dense_2z_testlr'
+
+UNIQUE_RUN_ID = 'supervised_aae_mixture_posterior_dense_2z'
 PROJECT_ROOT = Path.cwd()
 os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 # -------------------------------------------------------------------------------------------------------------
@@ -47,7 +33,7 @@ np.random.seed(random_seed)
 output_dir = PROJECT_ROOT / 'outputs'
 output_dir.mkdir(exist_ok=True)
 
-experiment_dir = output_dir / 'supervised_3d_maae_max_mixture_posterior_dense_2z_testlr'
+experiment_dir = output_dir / 'supervised_aae_mixture_posterior_dense_2z'
 experiment_dir.mkdir(exist_ok=True)
 
 latent_space_dir = experiment_dir / 'latent_space'
@@ -82,10 +68,10 @@ z_dim = 2
 h_dim = 1000
 # -------------------------------------------------------------------------------------------------------------
 # Define cyclic learning rate
-ae_lr = 0.0001
-gen_lr = 0.0002
-dc_lr = 0.0002
-NUM_OF_D=3
+ae_lr = 0.0002
+gen_lr = 0.0001
+dc_lr = 0.0001
+
 global_step = 0
 n_epochs = 20
 
@@ -94,18 +80,11 @@ n_epochs = 20
 ae_loss_weight = 1.
 gen_loss_weight = 1.
 dc_loss_weight = 1.
-# lam=[tf.Variable(tf.constant(1.))]
-lam = [tf.Variable(tf.constant(0.1))]
-cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
-# cross_entropy=tf.nn.sigmoid_cross_entropy_with_logits()
+
 mse = tf.keras.losses.MeanSquaredError()
-# mse=tf.math.squared_difference()
+
 accuracy = tf.keras.metrics.BinaryAccuracy()
-# weight_init = tf.keras.initializers.RandomNormal(stddev=WEIGHT_INIT_STDDEV)
 
-
-# prepare the inception v3 model
-# model = tf.keras.applications.InceptionV3(include_top=False, pooling='avg', input_shape=(299, 299, 3))
 # -------------------------------------------------------------------------------------------------------------
 # Create the dataset iterator
 x_train = x_train.astype('float32') / 255.
@@ -115,9 +94,6 @@ x_train = x_train.reshape(x_train.shape[0], img_size * img_size * num_c)
 x_test = x_test.reshape(x_test.shape[0], img_size * img_size * num_c)
 x_test_fid = x_test
 real_images = np.reshape(x_test_fid, (x_test_fid.shape[0], img_size, img_size, num_c))
-# real_images = np.array(x_test_fid)
-# -------------------------------------------------------------------------------------------------------------
-# Create the dataset iterator
 
 train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
 train_dataset = train_dataset.shuffle(buffer_size=train_buf)
@@ -144,17 +120,15 @@ def save_models(decoder, encoder, discriminator, epoch):
         signatures=None,
         options=None
     )
-    for ind in range(NUM_OF_D):
-        tf.keras.models.save_model(
-            discriminator[ind],
-            f'./{UNIQUE_RUN_ID}/discriminator{ind}_{epoch}.model',
-            overwrite=True,
-            include_optimizer=True,
-            save_format=None,
-            signatures=None,
-            options=None
-        )
-
+    tf.keras.models.save_model(
+        discriminator,
+        f'./{UNIQUE_RUN_ID}/discriminator_{epoch}.model',
+        overwrite=True,
+        include_optimizer=True,
+        save_format=None,
+        signatures=None,
+        options=None
+    )
 
 
 # -------------------------------------------------------------------------------------------------------------
@@ -170,7 +144,6 @@ def make_encoder_model():
     x = tf.keras.layers.Dropout(0.2)(x)
     x = tf.keras.layers.ReLU()(x)
     z = tf.keras.layers.Dense(z_dim, kernel_initializer=kernel_initializer)(x)
-    # stddev = tf.keras.layers.Dense(z_dim, kernel_initializer=kernel_initializer)(x)
     model = tf.keras.Model(inputs=inputs, outputs=z)
     return model
 
@@ -191,16 +164,16 @@ def make_decoder_model():
     return model
 
 
-def make_discriminator_model(keep_pro):
-    encoded = tf.keras.Input(shape=(z_dim+n_labels,))
+def make_discriminator_model():
+    encoded = tf.keras.Input(shape=(z_dim + n_labels,))
     kernel_initializer = tf.initializers.RandomNormal()
     x = tf.keras.layers.Dense(h_dim, kernel_initializer=kernel_initializer)(encoded)
     x = tf.keras.layers.Dropout(0.2)(x)
     x = tf.keras.layers.ReLU()(x)
     x = tf.keras.layers.Dense(h_dim, kernel_initializer=kernel_initializer)(x)
-    x = tf.keras.layers.Dropout(keep_pro)(x)
+    x = tf.keras.layers.Dropout(0.2)(x)
     x = tf.keras.layers.ReLU()(x)
-    prediction = tf.keras.layers.Dense(1, kernel_initializer=kernel_initializer)(x)
+    prediction = tf.keras.layers.Dense(1, kernel_initializer=kernel_initializer, activation='sigmoid')(x)
     model = tf.keras.Model(inputs=encoded, outputs=prediction)
     return model
 
@@ -209,31 +182,12 @@ def autoencoder_loss(inputs, reconstruction, ae_loss_weight):
     return ae_loss_weight * mse(inputs, reconstruction)
 
 
-def discriminator_loss(real_output, fake_output, dc_loss_weight):
-    loss_real = [cross_entropy(tf.ones_like(real_output[ind]), real_output[ind]) for ind in range(NUM_OF_D)]
-    loss_fake = [cross_entropy(tf.zeros_like(fake_output[ind]), fake_output[ind]) for ind in range(NUM_OF_D)]
-    d_loss = [loss_real[i] + loss_fake[i] for i in range(NUM_OF_D)]
-    return d_loss
-    # return tf.reduce_mean(-tf.math.log(real_output) - tf.math.log(1 - fake_output))
+def discriminator_loss(real_output, fake_output):
+    return tf.reduce_mean(-tf.math.log(real_output) - tf.math.log(1 - fake_output))
 
-def mix_pre(G_losses):
-    used_l = tf.nn.softplus(lam)
-    weights = tf.exp(used_l * G_losses)
-    # weights = used_l * G_losses
-    denom = tf.reduce_sum(weights)
-    weights = tf.math.divide(weights, denom)
-    print('lam_weights shape', weights.shape)
-    g_loss = tf.reduce_sum(weights * G_losses)
-    return g_loss, used_l
 
-def generator_loss(fake_output, gen_loss_weight):
-    G_losses = [cross_entropy(tf.ones_like(fake_output[ind]), fake_output[ind]) for ind in range(NUM_OF_D)]
-    # G_losses =   [tf.reduce_mean(tf.math.log(1-fake_output[ind])) for ind in
-    #             range(NUM_OF_D)]
-
-    # g_losses, used_l = mix_pre(G_losses)
-    # return gen_loss_weight * g_losses, used_l
-    return tf.reduce_max(G_losses)
+def generator_loss(fake_output):
+    return tf.reduce_mean(tf.math.log(1 - fake_output))
 
 
 def generate_fake_images(decoder, NUM):
@@ -276,51 +230,30 @@ def gaussian_mixture(batch_size, labels, n_classes):
 
     return z
 
+
 def reparameterization(z_mean, z_std):
-
-    mvn = tfp.distributions.MultivariateNormalDiag(
-        loc=[0,0],  # shape: [2, 3]
-        scale_diag=[5.,1.])
-    epsilon = mvn.sample(z_mean.shape[0])
-    # epsilon = tf.random.normal(shape=z_mean.shape, mean=0., stddev=5.)
-    z = z_mean + tf.math.exp(0.5 * z_std) * epsilon
-
-    # print("z_mean shape:", z_mean.shape)
-    # print("z shape:", z.shape)
-    # print("z:", z)
+    epsilon = tf.random.normal(shape=z_mean.shape, mean=0., stddev=5.)
+    z = z_mean + tf.exp(z_std * .5) * epsilon
 
     return z
+
+
 # -------------------------------------------------------------------------------------------------------------
-# Define cyclic learning rate
-#
-# ae_lr = 0.0002
-# dc_lr = 0.0001
-# gen_lr = 0.0001
-# Define optimizers
+# Define learning rate
 ae_optimizer = tf.keras.optimizers.Adam(lr=ae_lr)
 dc_optimizer = tf.keras.optimizers.Adam(lr=dc_lr)
 gen_optimizer = tf.keras.optimizers.Adam(lr=gen_lr)
 encoder = make_encoder_model()
 decoder = make_decoder_model()
-keep_pro=0.1
-discriminator =[ make_discriminator_model(keep_pro + 0.1*i) for i in range(NUM_OF_D)]
+discriminator = make_discriminator_model()
 encoder.summary()
 decoder.summary()
 
 
-
-
-
 @tf.function
-def train_step(batch_x,batch_y):
-
+def train_step(batch_x, batch_y):
     with tf.GradientTape(persistent=True) as ae_tape:
-        # batch_x = tf.concat(batch_x_split, 0)
-        # print("batch_x",batch_x.shape)
-        z= encoder(batch_x, training=True)
-        # z = reparameterization(z_mean, z_std)
-        # batch_y_one_hot = tf.one_hot(batch_y, n_labels)
-        # z_label=tf.concat([z, batch_y_one_hot], axis=1)
+        z = encoder(batch_x, training=True)
         decoder_output = decoder(z, training=True)
         # Autoencoder loss
         ae_loss = autoencoder_loss(batch_x, decoder_output, ae_loss_weight)
@@ -330,42 +263,37 @@ def train_step(batch_x,batch_y):
     # -------------------------------------------------------------------------------------------------------------
     # Discriminator
     with tf.GradientTape(persistent=True) as dc_tape:
-
         z = encoder(batch_x, training=True)
 
-        fake_distribution_label = tf.concat([z, tf.one_hot(batch_y, n_labels)], axis=1)
-
-        #real z
-        label_sample=np.random.randint(0, n_labels, size=[batch_x.shape[0]])
-
-        label_sample_one_hot=tf.one_hot(label_sample, n_labels)
-        real_distribution=gaussian_mixture(batch_x.shape[0], label_sample, n_labels)
-
-        real_distribution_label=tf.concat(
+        label_sample = np.random.randint(0, n_labels, size=[z.shape[0]])
+        label_sample_one_hot = tf.one_hot(label_sample, n_labels)
+        real_distribution = tf.random.normal(z.shape, mean=0, stddev=5)
+        real_distribution_label = tf.concat(
             [real_distribution, label_sample_one_hot], axis=1
         )
-        # real_distribution_label = tf.split(real_distribution_label, NUM_OF_D)
-        dc_real = [discriminator[ind](real_distribution_label, training=True)for ind in range(NUM_OF_D)]
-        dc_fake = [discriminator[ind](fake_distribution_label, training=True)for ind in range(NUM_OF_D)]
+        batch_y_one_hot = tf.one_hot(batch_y, n_labels)
+        fake_distribution_label = tf.concat([z, batch_y_one_hot], axis=1)
+        dc_real = discriminator(real_distribution_label, training=True)
+        dc_fake = discriminator(fake_distribution_label, training=True)
 
         # Discriminator Loss
-        dc_loss = discriminator_loss(dc_real, dc_fake, dc_loss_weight)
-        # dc_loss=tf.split(dc_loss,NUM_OF_D)
-        # Discriminator Acc
-        dc_acc = [accuracy(tf.concat([tf.ones_like(dc_real[ind]), tf.zeros_like(dc_fake[ind])], axis=0),
-                           tf.concat([dc_real[ind], dc_fake[ind]], axis=0)) for ind in range(NUM_OF_D)]
+        dc_loss = discriminator_loss(dc_real, dc_fake)
 
-    dc_grads = [dc_tape.gradient(dc_loss[ind], discriminator[ind].trainable_variables) for ind in range(NUM_OF_D)]
-    for ind in range(NUM_OF_D):
-        dc_optimizer.apply_gradients(zip(dc_grads[ind], discriminator[ind].trainable_variables))
+        # Discriminator Acc
+        dc_acc = accuracy(tf.concat([tf.ones_like(dc_real), tf.zeros_like(dc_fake)], axis=0),
+                          tf.concat([dc_real, dc_fake], axis=0))
+
+    dc_grads = dc_tape.gradient(dc_loss, discriminator.trainable_variables)
+
+    dc_optimizer.apply_gradients(zip(dc_grads, discriminator.trainable_variables))
 
     with tf.GradientTape(persistent=True) as gen_tape:
         z = encoder(batch_x, training=True)
-        fake_distribution_label = tf.concat([z, tf.one_hot(batch_y, n_labels)], axis=1)
-        dc_fake = [discriminator[ind](fake_distribution_label, training=True)for ind in range(NUM_OF_D)]
+        z_label = tf.concat([z, batch_y_one_hot], axis=1)
+        dc_fake = discriminator(z_label, training=True)
         # Generator loss
-        gen_loss= generator_loss(dc_fake, gen_loss_weight)
-        # sum_loss=gen_loss-0.001*used_l
+        gen_loss = generator_loss(dc_fake)
+
     gen_grads = gen_tape.gradient(gen_loss, encoder.trainable_variables)
     gen_optimizer.apply_gradients(zip(gen_grads, encoder.trainable_variables))
 
@@ -381,46 +309,36 @@ writer = tf.summary.create_file_writer(f'./cruves/{UNIQUE_RUN_ID}/')
 with writer.as_default():
     for epoch in range(n_epochs):
         start = time.time()
-        if epoch in [30,80]:
-            dc_lr=dc_lr/2
-            gen_lr=gen_lr/2
-            ae_lr=ae_lr/2
 
         epoch_ae_loss_avg = tf.metrics.Mean()
         epoch_dc_loss_avg = tf.metrics.Mean()
         epoch_dc_acc_avg = tf.metrics.Mean()
         epoch_gen_loss_avg = tf.metrics.Mean()
-        for batch, (batch_x,batch_y) in enumerate(train_dataset):
+        for batch, (batch_x, batch_y) in enumerate(train_dataset):
             # -------------------------------------------------------------------------------------------------------------
-            # Calculate cyclic learning rate
             global_step = global_step + 1
-            gen_optimizer.lr = gen_lr
-            dc_optimizer.lr = dc_lr
-            ae_optimizer.lr = ae_lr
-            # batch_x_split,batch_y_split=split_dataset(batch_x,batch_y)
-            # batch_x_split, batch_y_split = split_dataset(batch_x, batch_y)
             ae_loss, dc_loss, dc_acc, gen_loss = train_step(batch_x, batch_y)
 
             epoch_ae_loss_avg(ae_loss)
-            # epoch_dc_loss_avg(dc_loss)
-            # epoch_dc_acc_avg(dc_acc)
+            epoch_dc_loss_avg(dc_loss)
+            epoch_dc_acc_avg(dc_acc)
             epoch_gen_loss_avg(gen_loss)
 
             # write data after every n-th batch
 
             if global_step % 10 == 0:
                 tf.summary.scalar("ae_loss", np.mean(epoch_ae_loss_avg.result()), global_step)
-                [tf.summary.scalar("dc_loss%d"%ind, np.mean(dc_loss[ind]), global_step)for ind in range(NUM_OF_D)]
+                tf.summary.scalar("dc_loss", np.mean(epoch_dc_loss_avg.result()), global_step)
                 tf.summary.scalar("gen_loss", np.mean(epoch_gen_loss_avg.result()), global_step)
-                [tf.summary.scalar("dc_acc%d"%ind, np.mean(dc_acc[ind]), global_step)for ind in range(NUM_OF_D)]
-                # tf.summary.scalar("used_l", np.mean(used_l), global_step)
+                tf.summary.scalar("dc_acc", np.mean(epoch_dc_acc_avg.result()), global_step)
+
         epoch_time = time.time() - start
         print('{:4d}: TIME: {:.2f} ETA: {:.2f} AE_LOSS: {:.4f} DC_LOSS: {:.4f} DC_ACC: {:.4f} GEN_LOSS: {:.4f} ' \
               .format(epoch, epoch_time,
                       epoch_time * (n_epochs - epoch),
                       epoch_ae_loss_avg.result(),
-                      np.mean(dc_loss),
-                      np.mean(dc_acc),
+                      epoch_dc_loss_avg.result(),
+                      epoch_dc_acc_avg.result(),
                       epoch_gen_loss_avg.result()
                       ))
 
@@ -428,7 +346,7 @@ with writer.as_default():
         # -------------------------------------------------------------------------------------------------------------
         if (epoch) % 1 == 0:
             # Latent Space
-            z= encoder(x_test, training=False)
+            z = encoder(x_test, training=False)
             # z = reparameterization(z_mean, z_std)
             label_list = list(y_test)
 
@@ -452,10 +370,7 @@ with writer.as_default():
 
             # Reconstruction
             n_digits = 20  # how many digits we will display
-            z= encoder(x_test[:n_digits], training=False)
-            # z = reparameterization(z_mean, z_std)
-            # y_test_one_hot = tf.one_hot(y_test[:n_digits], n_labels)
-            # z_label = tf.concat([z, y_test_one_hot], axis=1)
+            z = encoder(x_test[:n_digits], training=False)
             x_test_decoded = decoder(z, training=False)
             x_test_decoded = np.reshape(x_test_decoded, [-1, img_size, img_size, num_c])
             fig = plt.figure(figsize=(20, 4))
@@ -486,11 +401,9 @@ with writer.as_default():
             for t in range(nx):
                 for r in range(ny):
                     label = np.random.randint(t, t + 1, size=[1])
-                    # label_sample_one_hot = tf.one_hot(label, n_labels)
-                    real_distribution = gaussian_mixture(1, label, n_labels)
-                    # dec_input = tf.concat(
-                    #     [real_distribution,label_sample_one_hot], axis=1
-                    # )
+                    label_sample_one_hot = tf.one_hot(label, n_labels)
+                    real_distribution = tf.random.normal(shape=[1, z_dim], mean=0, stddev=5)
+
                     x = decoder(real_distribution, training=False).numpy()
                     ax = plt.subplot(gs[i])
                     i += 1
@@ -502,4 +415,4 @@ with writer.as_default():
 
             plt.savefig(style_dir / ('epoch_%d.png' % epoch))
             plt.close()
-
+    print(UNIQUE_RUN_ID)

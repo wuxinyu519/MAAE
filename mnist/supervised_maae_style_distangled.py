@@ -24,7 +24,7 @@ from matplotlib import gridspec
 from skimage.transform import resize
 
 
-UNIQUE_RUN_ID = 'unsupervised_3d_maae_lam_gaussian_posterior_dense_8z_style'
+UNIQUE_RUN_ID = 'supervised_3d_maae_lam_gaussian_posterior_dense_8z_style'
 PROJECT_ROOT = Path.cwd()
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # -------------------------------------------------------------------------------------------------------------
@@ -37,7 +37,7 @@ np.random.seed(random_seed)
 output_dir = PROJECT_ROOT / 'outputs'
 output_dir.mkdir(exist_ok=True)
 
-experiment_dir = output_dir / 'unsupervised_3d_maae_lam_gaussian_posterior_dense_8z_style'
+experiment_dir = output_dir / 'supervised_3d_maae_lam_gaussian_posterior_dense_8z_style'
 experiment_dir.mkdir(exist_ok=True)
 
 latent_space_dir = experiment_dir / 'latent_space'
@@ -89,13 +89,10 @@ ae_loss_weight = 1.
 gen_loss_weight = 1.
 dc_loss_weight = 1.
 lam = [tf.Variable(tf.constant(0.1))]
-# gen_loss_weight=[tf.Variable(1-tf.constant(1.))]
+
 cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
 mse = tf.keras.losses.MeanSquaredError()
 accuracy = tf.keras.metrics.BinaryAccuracy()
-# weight_init = tf.keras.initializers.RandomNormal(stddev=WEIGHT_INIT_STDDEV)
-# prepare the inception v3 model
-# model = tf.keras.applications.InceptionV3(include_top=False, pooling='avg', input_shape=(299, 299, 3))
 
 # -------------------------------------------------------------------------------------------------------------
 # Create the dataset iterator

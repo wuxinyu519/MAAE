@@ -53,10 +53,8 @@ x_train, x_valid, y_train, y_valid = train_test_split(
     x_train, y_train,  # 把上面剩余的 x_train, y_train继续拿来切
     test_size=1 / 60  # test_size默认是0.25
 )
-# x_train = (x_train.astype('float32')-127.5) / 127.5
 x_valid = x_valid.astype('float32') / 255.
 x_test = x_test.astype('float32') / 255.
-# x_train = x_train.reshape(x_train.shape[0], img_size , img_size , num_c)
 x_valid = x_valid.reshape(x_valid.shape[0], img_size * img_size * num_c)
 x_test = x_test.reshape(x_test.shape[0], img_size * img_size * num_c)
 print(x_train.shape)
@@ -92,21 +90,19 @@ def gaussian_mixture(batch_size, labels, n_classes):
     return z
 
 
-# UNIQUE_RUN_ID = 'supervised_aae_mixture_posterior_dense_2z_testlr'
 UNIQUE_RUN_ID = 'unsupervised_3d_maae_max_gaussian_posterior_dense_8z_test'
 # -------------------------------------------------------------------------------------------------------------
 # Create the dataset iterator
 n_labels=10
-# +++++++++++++++++++supervised
+# =============supervised=================
 # label_sample = np.random.randint(0, n_labels, size=[x_test.shape[0]])
 # z = gaussian_mixture(x_test.shape[0], label_sample, n_labels)
-# ==============================
+# =============unsupervised=================
 z = tf.random.normal([x_test.shape[0], z_dim], mean=0.0, stddev=5.)
 
 decoder = tf.keras.models.load_model(UNIQUE_RUN_ID+"/decoder_199.model/")
-
-# max:3d->4d->5d
 # generator = tf.keras.models.load_model("./gan_75z/generator_24.model/")
+
 
 def log_mean_exp(a):
     max_ = a.max(axis=1)
@@ -160,17 +156,7 @@ def cross_validate_sigma(samples, data, sigmas, batch_size):
     ind = np.argmax(lls)
     return sigmas[ind]
 
-
-
-
-
-
-
 gen = decoder(z, training=False)
-# gen=(gen*127.5+125.5)/255.
-# gen = gen.astype('float32')
-
-# gen = np.reshape(gen, (x_test.shape[0], img_size * img_size * num_c))
 print('gen_image shape:', gen.shape)
 # cross validate sigma
 if sigma is None:
@@ -184,9 +170,6 @@ else:
     sigma = float(sigma)
 print("Using Sigma: {}".format(sigma))
 
-
-# fit and evaulate
-# gen_imgs
 
 def parzen(gen):
     '''parzen'''

@@ -8,7 +8,7 @@ import os
 import numpy as np
 
 from pathlib import Path
-from matplotlib import gridspec
+
 from sklearn.model_selection import train_test_split
 # Initialize variables
 NUM_EPOCHS = 25
@@ -30,7 +30,7 @@ PROJECT_ROOT = Path.cwd()
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 # Initialize loss function, init schema and optimizers
-# cross_entropy_loss = tensorflow.keras.losses.BinaryCrossentropy(from_logits=True)
+
 weight_init = tf.keras.initializers.RandomNormal(stddev=WEIGHT_INIT_STDDEV)
 generator_optimizer = tf.keras.optimizers.Adam(OPTIMIZER_LR,
                                                        beta_1=OPTIMIZER_BETAS[0], beta_2=OPTIMIZER_BETAS[1])
@@ -47,8 +47,6 @@ experiment_dir.mkdir(exist_ok=True)
 fake_dir = experiment_dir / 'fake_img'
 fake_dir.mkdir(exist_ok=True)
 
-style_dir = experiment_dir / 'style'
-style_dir.mkdir(exist_ok=True)
 
 
 def generate_image(generator, epoch=0):
@@ -93,19 +91,19 @@ def create_generator():
                                kernel_initializer=weight_init))
     generator.add(layers.BatchNormalization())
     generator.add(layers.LeakyReLU())
-    # Reshape 1D Tensor into 3D
+
     generator.add(layers.Reshape((7, 7, 128)))
-    # First upsampling block
+
     generator.add(layers.Conv2DTranspose(64, (5, 5), strides=(1, 1), padding='same', use_bias=False,
                                          kernel_initializer=weight_init))
     generator.add(layers.BatchNormalization())
     generator.add(layers.LeakyReLU())
-    # Second upsampling block
+
     generator.add(layers.Conv2DTranspose(32, (5, 5), strides=(2, 2), padding='same', use_bias=False,
                                          kernel_initializer=weight_init))
     generator.add(layers.BatchNormalization())
     generator.add(layers.LeakyReLU())
-    # Third upsampling block: note tanh, specific for DCGAN
+
     generator.add(layers.Conv2DTranspose(1, (5, 5), strides=(2, 2), padding='same', use_bias=False, activation='sigmoid',
                                          kernel_initializer=weight_init))
     # # Return generator
@@ -116,7 +114,6 @@ def create_generator():
 def generate_noise(number_of_images=1, noise_dimension=NOISE_DIMENSION):
     """ Generate noise for number_of_images images, with a specific noise_dimension """
     return tf.random.normal([number_of_images, noise_dimension], mean=0.0, stddev=5.0)
-    # return tf.random.uniform([number_of_images, noise_dimension], minval=-1., maxval=1.)
 
 
 def create_discriminator():
@@ -139,35 +136,15 @@ def create_discriminator():
     return discriminator
 
 
-def mix_pre(G_losses):
-    used_l = tf.nn.softplus(lam)
-
-    weights = tf.exp(used_l * G_losses)
-    denom = tf.reduce_sum(weights)
-    weights = tf.math.divide(weights, denom)
-    print('lam_weights shape', weights.shape)
-    g_loss = tf.reduce_sum(weights * G_losses)-0.001*used_l
-    return g_loss, used_l
-
 
 def compute_generator_loss(predicted_fake):
     """ Compute cross entropy loss for the generator """
-    # G_losses = [cross_entropy_loss(tf.ones_like(predicted_fake[ind]), predicted_fake[ind]) for ind in
-    #             range(NUM_OF_D)]
-    # print('G_losses:', len(G_losses))
     G_losses = tf.reduce_mean(tf.math.log(1 - predicted_fake))
-    # G_losses, used_l = mix_pre(G_losses)
     return G_losses
 
 
 def compute_discriminator_loss(predicted_real, predicted_fake):
     """ Compute discriminator loss """
-    # loss_on_reals = [cross_entropy_loss(tensorflow.ones_like(predicted_real[ind]), predicted_real[ind]) for ind in
-    #                  range(NUM_OF_D)]
-    # loss_on_fakes = [cross_entropy_loss(tensorflow.zeros_like(predicted_fake[ind]), predicted_fake[ind]) for ind in
-    #                  range(NUM_OF_D)]
-    # D_losses = tensorflow.add(loss_on_reals, loss_on_fakes)
-    # print('D_losses:', D_losses.shape)
     D_losses =tf.reduce_mean(-tf.math.log(predicted_real) - tf.math.log(1 - predicted_fake))
 
 
@@ -243,7 +220,7 @@ def perform_train_step(real_images, generator, discriminator):
 
 
 def train_gan(num_epochs, image_data, generator, discriminator):
-    """ Train the GMAN """
+    """ Train the GAN """
     # tensorboard writer
 
     if not os.path.exists(f'./cruves/{UNIQUE_RUN_ID}'):
@@ -262,41 +239,13 @@ def train_gan(num_epochs, image_data, generator, discriminator):
                 # Print statistics and generate image after every n-th batch
                 if batch_no % PRINT_STATS_AFTER_BATCH == 0:
                     print_training_progress(batch_no, generator_loss, discriminator_loss)
-
-                    # tf.summary.scalar("used_l", np.mean(used_l), epoch_no * ITERATIONS + batch_no)
                     tf.summary.scalar("gen_loss", np.mean(generator_loss), epoch_no * ITERATIONS + batch_no)
                     tf.summary.scalar("dc_acc", np.mean(dc_acc), epoch_no * ITERATIONS + batch_no)
 
                     tf.summary.scalar("dis_loss" , np.mean(discriminator_loss),
                                           epoch_no * ITERATIONS + batch_no)
 
-            # Sampling
-            # x_points = np.linspace(-1, 1, 20).astype(np.float32)
-            # y_points = np.linspace(-1, 1, 20).astype(np.float32)
-            # nx, ny = len(x_points), len(y_points)
-            # plt.subplot()
-            # gs = gridspec.GridSpec(nx, ny, hspace=0.05, wspace=0.05)
-            # for i, g in enumerate(gs):
-            #     z = np.concatenate(([x_points[int(i / ny)]], [y_points[int(i % nx)]]))
-            #     # z_std = np.concatenate(([x_points[int(i / ny)]], [y_points[int(i % nx)]]))
-            #     # epsilon = tf.random.normal(shape=z_mean.shape, mean=0, stddev=1)
-            #     # z = z_mean + (1e-8+z_std) * epsilon
-            #     dec_input = np.reshape(z, (1, NOISE_DIMENSION))
-            #     x = generator(dec_input.astype('float32'), training=False).numpy()
-            #     ax = plt.subplot(gs[i])
-            #
-            #     img = np.array(x.tolist()).reshape([img_size, img_size, num_c])
-            #     ax.imshow(img[:, :, 0], cmap='gray')
-            #     ax.set_xticks([])
-            #     ax.set_yticks([])
-            #     ax.set_aspect('auto')
-            #
-            # plt.savefig(style_dir / ('epoch_%d.png' % epoch_no))
-            # plt.close()
-            # fake_img
             generate_image(generator, epoch_no)
-            # Save models on 5 epoch completion.
-            # if epoch_no % SAVE_MODEL_AFTER_BATCH == 0:
             save_models(generator, discriminator, epoch_no)
 
     # Finished :-)
@@ -318,7 +267,7 @@ def run_gan():
     discriminator = create_discriminator()
 
     # Train the GMAN
-    print('Training GMAN ...')
+    print('Training GAN ...')
     train_gan(NUM_EPOCHS, data, generator, discriminator)
 
 

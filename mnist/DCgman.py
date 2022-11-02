@@ -29,7 +29,6 @@ PROJECT_ROOT = Path.cwd()
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 # Initialize loss function, init schema and optimizers
-# cross_entropy_loss = tensorflow.keras.losses.BinaryCrossentropy(from_logits=True)
 weight_init = tf.keras.initializers.RandomNormal(stddev=WEIGHT_INIT_STDDEV)
 generator_optimizer = tf.keras.optimizers.Adam(OPTIMIZER_LR,
                                                        beta_1=OPTIMIZER_BETAS[0], beta_2=OPTIMIZER_BETAS[1])
@@ -277,34 +276,8 @@ def train_gan(num_epochs, image_data, generator, discriminator):
                         tf.summary.scalar("dis[%d]_loss" % ind, np.mean(discriminator_loss[ind]),
                                           epoch_no * ITERATIONS + batch_no)
 
-            # Sampling
-            # x_points = np.linspace(-1, 1, 20).astype(np.float32)
-            # y_points = np.linspace(-1, 1, 20).astype(np.float32)
-            # nx, ny = len(x_points), len(y_points)
-            # plt.subplot()
-            # gs = gridspec.GridSpec(nx, ny, hspace=0.05, wspace=0.05)
-            # for i, g in enumerate(gs):
-            #     z = np.concatenate(([x_points[int(i / ny)]], [y_points[int(i % nx)]]))
-            #     # z_std = np.concatenate(([x_points[int(i / ny)]], [y_points[int(i % nx)]]))
-            #     # epsilon = tf.random.normal(shape=z_mean.shape, mean=0, stddev=1)
-            #     # z = z_mean + (1e-8+z_std) * epsilon
-            #     dec_input = np.reshape(z, (1, NOISE_DIMENSION))
-            #     x = generator(dec_input.astype('float32'), training=False).numpy()
-            #     ax = plt.subplot(gs[i])
-            #
-            #     img = np.array(x.tolist()).reshape([img_size, img_size, num_c])
-            #     ax.imshow(img[:, :, 0], cmap='gray')
-            #     ax.set_xticks([])
-            #     ax.set_yticks([])
-            #     ax.set_aspect('auto')
-            #
-            # plt.savefig(style_dir / ('epoch_%d.png' % epoch_no))
-            # plt.close()
-            # fake_img
+
             generate_image(generator, epoch_no)
-            # Save models on 5 epoch completion.
-            # if epoch_no % SAVE_MODEL_AFTER_BATCH == 0:
-            #     save_models(generator, discriminator, epoch_no)
 
     # Finished :-)
     save_models(generator, discriminator, num_epochs)
